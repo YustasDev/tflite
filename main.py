@@ -32,6 +32,11 @@ if __name__ == '__main__':
     tflite_model_file = pathlib.Path('model.tflite')
     tflite_model_file.write_bytes(tflite_model)
 
+    # alternate file saving option
+    with open("modelAlternative.tflite", "wb") as f:
+        f.write(tflite_model)
+
+#========================= Initialize the TFLite interpreter to try it out ========================>
     # Load TFLite model and allocate tensors
     interpreter = tf.lite.Interpreter(model_content=tflite_model)
     interpreter.allocate_tensors()
@@ -43,12 +48,14 @@ if __name__ == '__main__':
     # Test the TensorFlow Lite model on random input data
     input_shape = input_details[0]['shape']
     inputs, outputs = [], []
+    tflite_res = []
     for _ in range(100):
         input_data = np.array(np.random.random_sample(input_shape), dtype=np.float32)
         interpreter.set_tensor(input_details[0]['index'], input_data)
 
         interpreter.invoke()
         tflite_results = interpreter.get_tensor(output_details[0]['index'])
+        tflite_res.append(tflite_results[0][0])
 
         # Test the TensorFlow model on random input data.
         tf_results = model(tf.constant(input_data))
@@ -57,6 +64,13 @@ if __name__ == '__main__':
         inputs.append(input_data[0][0])
         outputs.append(output_data[0][0])
 
-        plt.plot(inputs, outputs, 'r')
-        plt.show()
+    plt.figure(figsize=(10, 6))
+    plt.title("TensorFlow model")
+    plt.plot(inputs, outputs, 'r')
+    plt.show()
+
+    plt.figure(figsize=(10, 6))
+    plt.title("TFLite model")
+    plt.plot(inputs, tflite_res, 'g')
+    plt.show()
 
