@@ -44,22 +44,34 @@ if __name__ == '__main__':
     #     as_supervised=True,
     # )
     ds = tfds.load('cats_vs_dogs', split='train', as_supervised=True)
-    mds = []
-    good_count = bad_count = 0
+    good_count = bad_count = cats = dogs = 0
+    cats_fls = '/home/progforce/tensorflow_datasets/cats_dataset/'
+    dogs_fls = '/home/progforce/tensorflow_datasets/dogs_dataset/'
 
-    for image, label in ds.take(1):
+
+    for image, label in ds:
         try:
             plt.imshow(image)
             # plt.axis('off')
             # plt.title("label: " + str(label))
             # plt.show()
-            element = (image, label)
-            mds.append(element)
+            if label ==0:
+                cats += 1
+                with open(cats_fls + "cats_" + str(cats) + ".jpg", "wb") as cat_ds:
+                    cat_ds.write(image)
+
+            else:
+                dogs += 1
+                with open(dogs_fls + "dogs_" + str(dogs) +".jpg", "wb") as dog_ds:
+                    dog_ds.write(image)
+
             good_count += 1
             print('good count: ' + str(good_count))
         except:
             bad_count += 1
-    print('len mds is: ' + len(mds))
+            print('bad count' + str(bad_count))
+    print('cats =: ' + str(cats))
+    print('dogs =: ' + str(dogs))
     print('bad images = ' + str(bad_count))
 
 
