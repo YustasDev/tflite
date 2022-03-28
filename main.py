@@ -1,4 +1,4 @@
-
+import pdb
 import tensorflow as tf
 from tensorflow import keras
 from keras import layers
@@ -12,6 +12,12 @@ import tensorflow_hub as hub
 import tensorflow_datasets as tfds
 import cv2
 import tempfile
+import pickle
+import shelve
+from keras.preprocessing.image import ImageDataGenerator
+import PIL
+import PIL.Image
+
 
 
 def format_image(image, label):
@@ -70,32 +76,90 @@ def transformationTFDS_in_ImageDirs():
     print('dogs =: ' + str(dogs))
     print('bad images = ' + str(bad_count))
 
+
+def _bytes_feature(value):
+  """Returns a bytes_list from a string / byte."""
+  if isinstance(value, type(tf.constant(0))):
+    value = value.numpy() # BytesList won't unpack a string from an EagerTensor.
+  return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+def _float_feature(value):
+  """Returns a float_list from a float / double."""
+  return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
+
+def _int64_feature(value):
+  """Returns an int64_list from a bool / enum / int / uint."""
+  return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
+
+
+
+
 def generate_dataset():
     image_size = (pixels, pixels)
     batch_size = BATCH_SIZE
 
-    train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+    #train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+    train_ds = tf.keras.utils.image_dataset_from_directory(
         "/home/progforce/tensorflow_datasets/createDataSet1/",
         validation_split=0.2,
         subset="training",
         seed=13,
         image_size=image_size,
-        batch_size=batch_size,
+        batch_size = 1
     )
+
     val_ds = tf.keras.preprocessing.image_dataset_from_directory(
         "/home/progforce/tensorflow_datasets/createDataSet1/",
         validation_split=0.2,
         subset="validation",
         seed=13,
         image_size=image_size,
-        batch_size=batch_size,
     )
 
-    # The saved data set occupies about 15 GB, although the original images are only about 500 MB !!!
-    # path_train_ds = os.path.join(tempfile.gettempdir(), "saved_trainDS")
-    # path_valid_ds = os.path.join(tempfile.gettempdir(), "saved_validDS")
-    # tf.data.experimental.save(train_ds, path_train_ds)
-    # tf.data.experimental.save(train_ds, path_valid_ds)
+    class_names = train_ds.class_names
+    print('class_names: ' + str(class_names))
+
+    # by default batch_size = 32
+    # plt.figure(figsize=(10, 10))
+    # for images, labels in train_ds.take(1):
+    #     for i in range(30):
+    #         ax = plt.subplot(6, 5, i + 1)
+    #         plt.imshow(images[i].numpy().astype("uint8"))
+    #         plt.title(class_names[labels[i]])
+    #         plt.axis("off")
+    #     plt.show()
+
+    # IF batch_size = 1
+    # for image, label in train_ds.take(1):
+    #     image = np.squeeze(image)
+    #     print("Image shape: ", image.shape)
+    #     print("Label: ", label.numpy())
+    #     plt.imshow(image.astype("uint8"))
+    #     plt.axis("off")
+    #     plt.show()
+
+    # https://www.tensorflow.org/tutorials/load_data/images
+    # AUTOTUNE = tf.data.AUTOTUNE
+    # train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
+    # val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
+    return train_ds, val_ds
+
+
+def image_example(image_string, label):
+    image_shape = tf.io.decode_jpeg(image_string).shape
+
+    feature = {
+            'height': _int64_feature(image_shape[0]),
+            'width': _int64_feature(image_shape[1]),
+            'depth': _int64_feature(image_shape[2]),
+            'label': _int64_feature(label),
+            'image_raw': _bytes_feature(image_string),
+        }
+
+    return tf.train.Example(features=tf.train.Features(feature=feature))
+    # pdb.set_trace()
 
 
 if __name__ == '__main__':
@@ -114,7 +178,17 @@ if __name__ == '__main__':
 
     tfds.disable_progress_bar() # it is not necessary
 
-    generate_dataset()
+    train_ds, val_ds = generate_dataset()
+
+    record_file = 'images.tfrecords'
+    with tf.io.TFRecordWriter(record_file) as writer:
+        for image, label in train_ds:
+            image = np.squeeze(image)
+            tf_example = image_example(image, label)
+            writer.write(tf_example.SerializeToString())
+
+
+
 
     # new_dataset = tf.data.experimental.load(path)
     # for elem, label in new_dataset:
