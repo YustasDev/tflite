@@ -96,13 +96,13 @@ def _int64_feature(value):
 
 
 
-def generate_dataset():
+def generate_dataset(path_to_imagesDir):
     image_size = (pixels, pixels)
     batch_size = BATCH_SIZE
 
     #train_ds = tf.keras.preprocessing.image_dataset_from_directory(
     train_ds = tf.keras.utils.image_dataset_from_directory(
-        "/home/progforce/tensorflow_datasets/createDataSet1/",
+        path_to_imagesDir,
         validation_split=0.2,
         subset="training",
         seed=13,
@@ -111,7 +111,7 @@ def generate_dataset():
     )
 
     val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        "/home/progforce/tensorflow_datasets/createDataSet1/",
+        path_to_imagesDir,
         validation_split=0.2,
         subset="validation",
         seed=13,
@@ -178,30 +178,23 @@ if __name__ == '__main__':
 
     tfds.disable_progress_bar() # it is not necessary
 
-    train_ds, val_ds = generate_dataset()
-
-    record_file = 'images.tfrecords'
-    with tf.io.TFRecordWriter(record_file) as writer:
-        for image, label in train_ds:
-            image = np.squeeze(image)
-            tf_example = image_example(image, label)
-            writer.write(tf_example.SerializeToString())
+    path_to_imagesDir = "/home/progforce/tensorflow_datasets/createDataSet1/"
+    train_ds, val_ds = generate_dataset(path_to_imagesDir)
 
 
+#=================== It works, but my computer can't handle it ===========================================>
+    # Save dataset
+    #savingDS_dir = "/home/progforce/tensorflow_datasets/savingDS/"
+    #tf.data.experimental.save(train_ds, savingDS_dir, compression='GZIP')
+    # with open(savingDS_dir + '/element_spec', 'wb') as out_:  # also save the element_spec to disk for future loading
+    #     pickle.dump(train_ds.element_spec, out_)
 
+# ========================= Load dataset ========================================================>
+#     with open(savingDS_dir + '/element_spec', 'rb') as in_:
+#         es = pickle.load(in_)
+#     loaded = tf.data.experimental.load(savingDS_dir, es, compression='GZIP')
+# ==========================================================================================================>
 
-    # new_dataset = tf.data.experimental.load(path)
-    # for elem, label in new_dataset:
-    #     plt.imshow(elem)
-    #     plt.axis('off')
-    #     plt.title("label: " + str(label))
-    #     plt.show()
-
-    # entire_set, info = tfds.load(
-    #     'cats_vs_dogs',
-    #     with_info=True,
-    #     as_supervised=True,
-    # )
 
 
 
