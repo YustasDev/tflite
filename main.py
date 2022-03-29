@@ -17,6 +17,12 @@ import shelve
 from keras.preprocessing.image import ImageDataGenerator
 import PIL
 import PIL.Image
+import sklearn
+from sklearn.model_selection import train_test_split
+import splitfolders
+
+
+
 
 
 
@@ -46,8 +52,8 @@ def remove_badlyEncoded_images():
 def transformationTFDS_in_ImageDirs():
     ds = tfds.load('cats_vs_dogs', split='train', as_supervised=True)
     good_count = bad_count = cats = dogs = 0
-    cats_fls = '/home/progforce/tensorflow_datasets/createDataSet1/cats_dataset/'
-    dogs_fls = '/home/progforce/tensorflow_datasets/createDataSet1/dogs_dataset/'
+    cats_fls = '/home/progforce/tensorflow_datasets/createDataSet1/cat/'
+    dogs_fls = '/home/progforce/tensorflow_datasets/createDataSet1/dog/'
 
     for image, label in ds:
         try:
@@ -92,33 +98,37 @@ def _int64_feature(value):
   return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
-
-
-
-
 def generate_dataset(path_to_imagesDir):
-    image_size = (pixels, pixels)
+    image_size = IMAGE_SIZE
     batch_size = BATCH_SIZE
 
     #train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-    train_ds = tf.keras.utils.image_dataset_from_directory(
+    # train_ds = tf.keras.utils.image_dataset_from_directory(
+    #     path_to_imagesDir,
+    #     validation_split=0.2,
+    #     subset="training",
+    #     seed=13,
+    #     image_size=image_size,
+    #     batch_size = 1
+    # )
+    #
+    # val_ds = tf.keras.utils.image_dataset_from_directory(
+    #     path_to_imagesDir,
+    #     validation_split=0.2,
+    #     subset="validation",
+    #     seed=13,
+    #     image_size=image_size,
+    # )
+
+    entire_ds = tf.keras.utils.image_dataset_from_directory(
         path_to_imagesDir,
-        validation_split=0.2,
-        subset="training",
+        subset="train",
         seed=13,
         image_size=image_size,
         batch_size = 1
     )
 
-    val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        path_to_imagesDir,
-        validation_split=0.2,
-        subset="validation",
-        seed=13,
-        image_size=image_size,
-    )
-
-    class_names = train_ds.class_names
+    class_names = entire_ds.class_names
     print('class_names: ' + str(class_names))
 
     # by default batch_size = 32
@@ -144,7 +154,8 @@ def generate_dataset(path_to_imagesDir):
     # AUTOTUNE = tf.data.AUTOTUNE
     # train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
     # val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
-    return train_ds, val_ds
+    #return train_ds, val_ds
+    return entire_ds
 
 
 def image_example(image_string, label):
@@ -160,6 +171,11 @@ def image_example(image_string, label):
 
     return tf.train.Example(features=tf.train.Features(feature=feature))
     # pdb.set_trace()
+
+def split_folders(input_folder, output_folder):
+    splitfolders.ratio(input_folder, output = output_folder, seed = 13, ratio=(0.7, 0.2, 0.1), group_prefix=None)
+
+
 
 
 if __name__ == '__main__':
@@ -179,7 +195,6 @@ if __name__ == '__main__':
     tfds.disable_progress_bar() # it is not necessary
 
     path_to_imagesDir = "/home/progforce/tensorflow_datasets/createDataSet1/"
-    train_ds, val_ds = generate_dataset(path_to_imagesDir)
 
 
 #=================== It works, but my computer can't handle it ===========================================>
@@ -194,6 +209,97 @@ if __name__ == '__main__':
 #         es = pickle.load(in_)
 #     loaded = tf.data.experimental.load(savingDS_dir, es, compression='GZIP')
 # ==========================================================================================================>
+    input_folder = "/home/progforce/tensorflow_datasets/createDataSet1/"
+    output_folder = "/home/progforce/tensorflow_datasets/createDataSet1_Split/"
+    #split_folders(input_folder, output_folder)
+
+
+    train_ds = tf.keras.utils.image_dataset_from_directory(
+        output_folder + '/train',
+        image_size=IMAGE_SIZE,
+        batch_size = BATCH_SIZE,
+        seed = 13
+    )
+
+    valid_ds = tf.keras.utils.image_dataset_from_directory(
+        output_folder + '/val',
+        image_size=IMAGE_SIZE,
+        batch_size = BATCH_SIZE,
+        seed = 13
+    )
+
+    test_ds = tf.keras.utils.image_dataset_from_directory(
+        output_folder + '/test',
+        image_size=IMAGE_SIZE,
+        batch_size = 1,
+        seed = 13
+    )
+
+    train_batches = train_ds.map(format_image).prefetch(1)
+    validation_batches = valid_ds.map(format_image).prefetch(1)
+    test_batches = test_ds.map(format_image)
+    num_classes = 2
+
+    # Check shape
+    for image_batch, label_batch in train_batches.take(1):
+        print(str(image_batch.shape))
+        print(str(label_batch))
+
+    for image_batch, label_batch in test_batches.take(1):
+        print(str(image_batch.shape))
+
+    do_fine_tuning = False  # @param {type:"boolean"}
+
+    feature_extractor = hub.KerasLayer(MODULE_HANDLE,
+                                       input_shape=IMAGE_SIZE + (3,),
+                                       output_shape=[FV_SIZE],
+                                       trainable=do_fine_tuning)
+
+
+    print("Building model with", MODULE_HANDLE)
+    model = tf.keras.Sequential([
+        feature_extractor,
+        tf.keras.layers.Dense(num_classes)
+    ])
+    model.summary()
+
+    # @title (Optional) Unfreeze some layers
+    NUM_LAYERS = 7  # @param {type:"slider", min:1, max:50, step:1}
+    if do_fine_tuning:
+        feature_extractor.trainable = True
+        for layer in model.layers[-NUM_LAYERS:]:
+            layer.trainable = True
+    else:
+        feature_extractor.trainable = False
+
+    if do_fine_tuning:
+        model.compile(
+            optimizer=tf.keras.optimizers.SGD(lr=0.002, momentum=0.9),
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            metrics=['accuracy'])
+    else:
+        model.compile(
+            optimizer='adam',
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+            metrics=['accuracy'])
+
+    EPOCHS = 5
+    history = model.fit(train_batches,
+                     epochs=EPOCHS,
+                     validation_data=validation_batches)
+
+    CATS_VS_DOGS_SAVED_MODEL = "exp_saved_model"
+    tf.saved_model.save(model, CATS_VS_DOGS_SAVED_MODEL)
+
+
+
+
+
+
+
+
+
+
 
 
 
