@@ -20,6 +20,7 @@ import PIL.Image
 import sklearn
 from sklearn.model_selection import train_test_split
 import splitfolders
+from tqdm import tqdm
 
 
 
@@ -175,6 +176,30 @@ def image_example(image_string, label):
 def split_folders(input_folder, output_folder):
     splitfolders.ratio(input_folder, output = output_folder, seed = 13, ratio=(0.7, 0.2, 0.1), group_prefix=None)
 
+def representative_data_gen():
+    for input_value, _ in test_batches.take(100):
+        yield [input_value]
+
+
+def plot_image(i, predictions_array, true_label, img):
+    predictions_array, true_label, img = predictions_array[i], true_label[i], img[i]
+    plt.grid(False)
+    plt.xticks([])
+    plt.yticks([])
+
+    img = np.squeeze(img)
+    plt.imshow(img, cmap=plt.cm.binary)
+    predicted_label = np.argmax(predictions_array)
+    if predicted_label == true_label:
+        color = 'green'
+    else:
+        color = 'red'
+
+    plt.xlabel("{} {:2.0f}% ({})".format(class_names[predicted_label],
+                                         100 * np.max(predictions_array),
+                                         class_names[true_label]),
+               color=color)
+
 
 
 
@@ -213,7 +238,7 @@ if __name__ == '__main__':
     output_folder = "/home/progforce/tensorflow_datasets/createDataSet1_Split/"
     #split_folders(input_folder, output_folder)
 
-
+#===================== create the necessary datasets ==============================>
     train_ds = tf.keras.utils.image_dataset_from_directory(
         output_folder + '/train',
         image_size=IMAGE_SIZE,
@@ -248,6 +273,8 @@ if __name__ == '__main__':
     for image_batch, label_batch in test_batches.take(1):
         print(str(image_batch.shape))
 
+#================== create and fit model ==========================================>
+    """
     do_fine_tuning = False  # @param {type:"boolean"}
 
     feature_extractor = hub.KerasLayer(MODULE_HANDLE,
@@ -287,26 +314,62 @@ if __name__ == '__main__':
     history = model.fit(train_batches,
                      epochs=EPOCHS,
                      validation_data=validation_batches)
-
+    """
     CATS_VS_DOGS_SAVED_MODEL = "exp_saved_model"
-    tf.saved_model.save(model, CATS_VS_DOGS_SAVED_MODEL)
+    #tf.saved_model.save(model, CATS_VS_DOGS_SAVED_MODEL)
+
+#=============== convert saved model into TFLite model ===============================>
+    converter = tf.lite.TFLiteConverter.from_saved_model(CATS_VS_DOGS_SAVED_MODEL)
+
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.representative_dataset = representative_data_gen
+    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+
+    tflite_model = converter.convert()
+    tflite_model_file = 'converted_model.tflite'
+
+    with open(tflite_model_file, "wb") as f:
+        f.write(tflite_model)
+
+#============================== test the TFLite model using the Python Interpreter ===========>
+    # Load TFLite model and allocate tensors.
+    interpreter = tf.lite.Interpreter(model_path=tflite_model_file)
+    interpreter.allocate_tensors()
+
+    input_index = interpreter.get_input_details()[0]["index"]
+    output_index = interpreter.get_output_details()[0]["index"]
 
 
 
+    # Gather results for the randomly sampled test images
+    # predictions = []
+    #
+    # test_labels, test_imgs = [], []
+    # for img, label in tqdm(test_batches.take(10)):
+    #     interpreter.set_tensor(input_index, img)
+    #     interpreter.invoke()
+    #     predictions.append(interpreter.get_tensor(output_index))
+    #
+    #     test_labels.append(label.numpy()[0])
+    #     test_imgs.append(img)
 
+    class_names = ['cat', 'dog']
+    #
+    #
+    # plt.figure(figsize=(10, 10))
+    # for index in range(10):
+    #     z = plt.subplot(2, 5, index+1)
+    #     plot_image(index, predictions, test_labels, test_imgs)
+    # plt.show()
 
-
-
-
-
-
-
-
-
-
-
-
-
+    #plt.figure(figsize=(10, 10))
+    # for images, labels in train_ds.take(1):
+    #     for i in range(30):
+    #         ax = plt.subplot(6, 5, i + 1)
+    #         plt.imshow(images[i].numpy().astype("uint8"))
+    #         plt.title(class_names[labels[i]])
+    #         plt.axis("off")
+    #     plt.show()
 
 
 
