@@ -24,9 +24,6 @@ from tqdm import tqdm
 
 
 
-
-
-
 def format_image(image, label):
   image = tf.image.resize(image, IMAGE_SIZE) / 255.0
   return  image, label
@@ -339,40 +336,27 @@ if __name__ == '__main__':
     input_index = interpreter.get_input_details()[0]["index"]
     output_index = interpreter.get_output_details()[0]["index"]
 
+    #Gather results for the randomly sampled test images
+    predictions = []
 
+    test_labels, test_imgs = [], []
+    for img, label in tqdm(test_batches.take(10)):
+        interpreter.set_tensor(input_index, img)
+        interpreter.invoke()
+        predictions.append(interpreter.get_tensor(output_index))
 
-    # Gather results for the randomly sampled test images
-    # predictions = []
-    #
-    # test_labels, test_imgs = [], []
-    # for img, label in tqdm(test_batches.take(10)):
-    #     interpreter.set_tensor(input_index, img)
-    #     interpreter.invoke()
-    #     predictions.append(interpreter.get_tensor(output_index))
-    #
-    #     test_labels.append(label.numpy()[0])
-    #     test_imgs.append(img)
+        test_labels.append(label.numpy()[0])
+        test_imgs.append(img)
 
     class_names = ['cat', 'dog']
-    #
-    #
-    # plt.figure(figsize=(10, 10))
-    # for index in range(10):
-    #     z = plt.subplot(2, 5, index+1)
-    #     plot_image(index, predictions, test_labels, test_imgs)
-    # plt.show()
 
-    #plt.figure(figsize=(10, 10))
-    # for images, labels in train_ds.take(1):
-    #     for i in range(30):
-    #         ax = plt.subplot(6, 5, i + 1)
-    #         plt.imshow(images[i].numpy().astype("uint8"))
-    #         plt.title(class_names[labels[i]])
-    #         plt.axis("off")
-    #     plt.show()
+    plt.figure(figsize=(10, 10))
+    for index in range(10):
+        z = plt.subplot(2, 5, index+1)
+        plot_image(index, predictions, test_labels, test_imgs)
+    plt.show()
 
-
-
+# ========================= Game Over )) ==============================================>
     """
     # it'll divide dataset in ratio 80%, 10%, 10% (train, validation, test)
     (train_examples, validation_examples, test_examples), info = tfds.load(
@@ -392,13 +376,6 @@ if __name__ == '__main__':
     # test_batches = test_examples.map(format_image).batch(1)
 
     """
-
-
-
-
-
-
-
 
     """
     # Create a simple Keras model.
