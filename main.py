@@ -439,4 +439,3 @@ if __name__ == '__main__':
     plt.plot(inputs, tflite_res, 'g')
     plt.show()
     """
-
